@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly time planner (Google Calendar)</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initAuth()" onerror="setConnError()"></script>
+<style>
+:root {
+  --paper: #eef1ec; --card: #ffffff; --ink: #1b2a2f; --muted: #5d6b70; --line: #d5dcd6;
+  --sales: #c2410c; --admin: #3f5e8c; --prep: #4d7c4f; --busy: #9aa3a6;
+  --warn: #b91c1c; --target: #4d7c4f;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111a1d; --card: #182428; --ink: #e4ebe7; --muted: #9aa6a9; --line: #2b3b40;
+    --sales: #f08a4b; --admin: #8fb0e0; --prep: #87c28a; --busy: #5d6b70;
+    --warn: #f87171; --target: #87c28a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font: 600 28px/1.2 Georgia, "Times New Roman", serif; margin: 0 0 4px; }
+h2 { font: 600 19px/1.3 Georgia, "Times New Roman", serif; margin: 0 0 12px; }
+p { margin: 0; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; margin-top: 16px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.big { font: 600 44px/1 Georgia, serif; }
+.meter { position: relative; height: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; margin: 14px 0 6px; overflow: hidden; }
+.meter .band { position: absolute; top: 0; bottom: 0; left: 60%; width: 5%; background: color-mix(in srgb, var(--target) 25%, transparent); }
+.meter .fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--target); transition: width .25s ease; }
+.meter.over .fill { background: var(--warn); }
+.scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.status { margin-top: 10px; font-weight: 600; }
+.status.over { color: var(--warn); }
+.status.in { color: var(--target); }
+.buckets { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+.bucket { border-left: 4px solid var(--c); padding: 6px 0 6px 12px; }
+.bucket .hrs { font-size: 22px; font-weight: 600; }
+.bucket .pct { color: var(--muted); font-size: 13px; }
+form.add { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+input, select, button { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; min-height: 40px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--admin); outline-offset: 2px; }
+button { cursor: pointer; }
+button.primary { background: var(--ink); color: var(--card); border-color: var(--ink); font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.msg { font-size: 13px; min-height: 18px; margin-top: 8px; color: var(--muted); }
+.msg.err { color: var(--warn); }
+.hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: middle; }
+.grid-wrap { overflow-x: auto; }
+.grid { display: grid; grid-template-columns: 52px repeat(7, minmax(110px, 1fr)); min-width: 860px; }
+.grid .head { font-weight: 600; padding: 6px 0; text-align: center; border-bottom: 1px solid var(--line); }
+.hours { position: relative; }
+.hours .h { position: absolute; left: 0; right: 0; font-size: 11px; color: var(--muted); transform: translateY(-50%); padding-right: 6px; text-align: right; }
+.col { position: relative; border-left: 1px solid var(--line); }
+.col .tick { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
+.block { position: absolute; left: 4px; right: 4px; background: color-mix(in srgb, var(--c) 18%, var(--card)); border-left: 4px solid var(--c); border-radius: 3px; padding: 3px 6px; font-size: 12px; line-height: 1.25; overflow: hidden; color: var(--ink); }
+.block.busy { background: color-mix(in srgb, var(--busy) 18%, var(--card)); border-left-color: var(--busy); color: var(--muted); }
+.block.mine { cursor: pointer; }
+.block small { display: block; color: var(--muted); font-size: 11px; }
+.days { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px 10px; margin: 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.days legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
+.days .hint { width: 100%; margin-top: 0; }
+.hidden { display: none !important; }
+.avail-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.avail-row:last-child { border-bottom: 0; }
+.avail-day { width: 48px; font-weight: 600; }
+.avail-row input[type="time"] { min-height: 36px; }
+.list-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.list-table th, .list-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.list-table th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.empty-note { color: var(--muted); font-size: 14px; padding: 8px 0; }
+button.danger { color: var(--warn); background: transparent; border-color: transparent; padding: 4px 8px; min-height: 32px; }
+.chk { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; color: var(--ink); font-size: 14px; }
+.block:focus-visible { outline: 2px solid var(--admin); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Weekly time planner</h1>
+  <p>Plan up to about 65% of the 168 hours. Every block is saved to Google Calendar and checked for clashes against all of her events.</p>
+
+  <section class="card" aria-labelledby="conn-h">
+    <h2 id="conn-h">Google Calendar</h2>
+    <div class="row">
+      <button class="primary" id="signin-btn" type="button">Connect Google Calendar</button>
+      <button id="refresh-btn" type="button" disabled>Refresh from Calendar</button>
+      <button id="prev-btn" type="button" disabled>&larr; Previous week</button>
+      <button id="this-btn" type="button" disabled>This week</button>
+      <button id="next-btn" type="button" disabled>Next week &rarr;</button>
+      <span id="week-label" style="color:var(--muted)"></span>
+    </div>
+    <div class="msg" id="conn-msg">Not connected. Connect to load this week's events.</div>
+    <p class="msg"><a id="setup-link" href="setup-client-id.html" hidden>Open the setup page</a></p>
+  </section>
+
+  <section class="card" aria-labelledby="cap-h">
+    <h2 id="cap-h">Planned time this week</h2>
+    <div class="row">
+      <span class="big" id="pct">0%</span>
+      <span id="hrs" style="color:var(--muted)">0 of 168 hours planned</span>
+    </div>
+    <div class="meter" id="meter" role="meter" aria-label="Planned share of the week" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="band" aria-hidden="true"></div>
+      <div class="fill" id="fill"></div>
+    </div>
+    <div class="scale"><span>0%</span><span>60%</span><span>65%</span><span>100%</span></div>
+    <div class="status" id="status"></div>
+    <div class="buckets" id="buckets"></div>
+  </section>
+
+  <section class="card" aria-labelledby="add-h">
+    <h2 id="add-h">Add a task block</h2>
+    <div class="add-wrap">
+      <form class="add" onsubmit="return false">
+        <label>Task
+          <input id="f-name" type="text" maxlength="80" placeholder="e.g. Follow up with leads">
+        </label>
+        <label>Bucket
+          <select id="f-bucket">
+            <option value="sales">Sales activities</option>
+            <option value="admin">Admin activities</option>
+            <option value="prep">Procurement / preparation</option>
+          </select>
+        </label>
+        <label>Repeats
+          <select id="f-freq">
+            <option value="once">Once</option>
+            <option value="daily">Every day</option>
+            <option value="weekly">Weekly on chosen days</option>
+            <option value="monthly">Monthly on one day</option>
+          </select>
+        </label>
+        <fieldset class="days" id="f-days">
+          <legend>Days</legend>
+          <label class="chk"><input type="checkbox" name="day" value="0"> Mon</label>
+          <label class="chk"><input type="checkbox" name="day" value="1"> Tue</label>
+          <label class="chk"><input type="checkbox" name="day" value="2"> Wed</label>
+          <label class="chk"><input type="checkbox" name="day" value="3"> Thu</label>
+          <label class="chk"><input type="checkbox" name="day" value="4"> Fri</label>
+          <label class="chk"><input type="checkbox" name="day" value="5"> Sat</label>
+          <label class="chk"><input type="checkbox" name="day" value="6"> Sun</label>
+          <span class="hint" id="days-hint"></span>
+        </fieldset>
+        <label>Start
+          <input id="f-start" type="time" value="09:00">
+        </label>
+        <label>Length (minutes)
+          <input id="f-len" type="number" min="5" max="1440" step="5" value="60">
+        </label>
+        <div>
+          <button class="primary" id="add-btn" type="button" disabled>Add to calendar</button>
+        </div>
+      </form>
+    </div>
+    <div class="msg err" id="form-error" role="alert"></div>
+    <p class="hint">Repeating blocks are saved as recurring events in Google Calendar, so they carry into future weeks. A block is refused if it overlaps any event already in her calendar. Click one of her blocks on the grid to delete it from Google Calendar.</p>
+  </section>
+
+  <section class="card" aria-labelledby="avail-h">
+    <h2 id="avail-h">Working hours</h2>
+    <p class="hint">Auto-plot only uses free time inside these hours. They're remembered in this browser.</p>
+    <div id="avail-rows"></div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" id="avail-save">Save working hours</button>
+      <span class="msg" id="avail-msg"></span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="q-h">
+    <h2 id="q-h">Repeating tasks</h2>
+    <p class="hint">Add tasks that repeat, for example sales calls every weekday for 90 minutes a day. Auto-plot fits them into free time inside your working hours, highest priority first. Tasks are remembered in this browser.</p>
+    <form class="add" id="q-form" onsubmit="return false">
+      <label>Task
+        <input id="q-name" type="text" maxlength="80" placeholder="e.g. Sales calls">
+      </label>
+      <label>Bucket
+        <select id="q-bucket">
+          <option value="sales">Sales activities</option>
+          <option value="admin">Admin activities</option>
+          <option value="prep">Procurement / preparation</option>
+        </select>
+      </label>
+      <label>Priority (1 = highest)
+        <input id="q-prio" type="number" min="1" max="99" step="1" value="1">
+      </label>
+      <label>Preferred time
+        <select id="q-pref">
+          <option value="any">Any time</option>
+          <option value="morning">Morning (06:00–12:00)</option>
+          <option value="afternoon">Afternoon (12:00–17:00)</option>
+          <option value="evening">Evening (17:00–21:00)</option>
+          <option value="late">Late evening (21:00–24:00)</option>
+        </select>
+      </label>
+      <label>Minutes per day
+        <input id="q-min" type="number" min="5" max="1440" step="5" value="90">
+      </label>
+      <fieldset class="days" id="q-days">
+        <legend>Days</legend>
+        <label class="chk"><input type="checkbox" name="qday" value="0"> Mon</label>
+        <label class="chk"><input type="checkbox" name="qday" value="1"> Tue</label>
+        <label class="chk"><input type="checkbox" name="qday" value="2"> Wed</label>
+        <label class="chk"><input type="checkbox" name="qday" value="3"> Thu</label>
+        <label class="chk"><input type="checkbox" name="qday" value="4"> Fri</label>
+        <label class="chk"><input type="checkbox" name="qday" value="5"> Sat</label>
+        <label class="chk"><input type="checkbox" name="qday" value="6"> Sun</label>
+        <button type="button" id="q-weekdays">Weekdays</button>
+        <button type="button" id="q-everyday">Every day</button>
+        <button type="button" id="q-clear">Clear</button>
+      </fieldset>
+      <div><button class="primary" type="button" id="q-add">Add task</button></div>
+    </form>
+    <div class="msg err" id="q-error" role="alert"></div>
+    <div id="queue-list" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" type="button" id="plot-btn">Preview auto-plot for this week</button>
+      <span class="msg" id="plot-msg"></span>
+    </div>
+  </section>
+
+  <section class="card hidden" id="preview" aria-labelledby="prev-h">
+    <h2 id="prev-h">Auto-plot preview</h2>
+    <p class="hint">Nothing is saved until you confirm.</p>
+    <div id="preview-body"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" type="button" id="confirm-plot">Add to Google Calendar</button>
+      <button type="button" id="cancel-plot">Cancel</button>
+      <span class="msg" id="confirm-msg"></span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="grid-h">
+    <h2 id="grid-h">The week at a glance</h2>
+    <div class="legend">
+      <span><span class="swatch" style="--c:var(--sales)"></span>Sales</span>
+      <span><span class="swatch" style="--c:var(--admin)"></span>Admin</span>
+      <span><span class="swatch" style="--c:var(--prep)"></span>Procurement / preparation</span>
+      <span><span class="swatch" style="--c:var(--busy)"></span>Her other events (busy)</span>
+    </div>
+    <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+    <p class="hint" id="allday-note"></p>
+  </section>
+</main>
+
+<script>
+/* ===== SETUP: paste the OAuth Client ID from your Google Cloud project here ===== */
+let CLIENT_ID = "";   // loaded from client_id.txt in the same folder
+
+const SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const CAL_ID = "primary";
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const WEEK_MIN = 168 * 60;
+const HOUR_PX = 44;
+const BUCKETS = {
+  sales: { label: "Sales activities", tag: "[Sales]", colorId: "6" },
+  admin: { label: "Admin activities", tag: "[Admin]", colorId: "9" },
+  prep:  { label: "Procurement / preparation", tag: "[Prep]", colorId: "10" }
+};
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const FREQ_LABEL = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
+
+let tokenClient = null;
+let token = null;
+let weekStart = mondayOf(new Date());
+let events = [];
+// Each all-day event (holiday, reminder, etc.) counts as this many minutes toward the week.
+// Change to 24 * 60 if you want a full day to count.
+const ALL_DAY_MIN = 8 * 60;
+let allDayEvents = [];          // all timed events in the displayed week (expanded instances)
+
+/* ---------- date helpers ---------- */
+function mondayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function at(dayOffset, minutes) { const d = addDays(weekStart, dayOffset); d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0); return d; }
+function dayIndex(d) { return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - weekStart) / 864e5); }
+function fmtT(d) { return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function fmtHours(min) { const h = Math.round(min / 6) / 10; return (Number.isInteger(h) ? h : h.toFixed(1)) + " h"; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* ---------- auth ---------- */
+async function initAuth() {
+  if (!window.google || !google.accounts) { setConn("Google sign-in script did not load. Check your internet connection.", true); return; }
+  try {
+    CLIENT_ID = await loadClientId();
+  } catch (err) {
+    setConn(err.message, true);
+    document.getElementById("setup-link").hidden = false;
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPE,
+    callback: (resp) => {
+      if (resp.error) { setConn("Sign-in failed: " + resp.error, true); return; }
+      token = resp.access_token;
+      setConn("Connected to Google Calendar (" + TZ + ").");
+      enableControls(true);
+      loadWeek();
+    }
+  });
+  document.getElementById("signin-btn").addEventListener("click", () => tokenClient.requestAccessToken({ prompt: token ? "" : "consent" }));
+}
+async function loadClientId() {
+  let res;
+  if (window.location.protocol === "file:") {
+    throw new Error("Open this planner through the local server (see the setup page), not by double-clicking it.");
+  }
+  try {
+    res = await fetch("client_id.txt", { cache: "no-store" });
+  } catch (e) {
+    throw new Error("Can't read client_id.txt. Check that the local server is running.");
+  }
+  if (!res.ok) throw new Error("client_id.txt was not found in this folder. Run the setup page first.");
+  const id = (await res.text()).trim();
+  if (!/^[0-9A-Za-z._-]+\.apps\.googleusercontent\.com$/.test(id)) {
+    throw new Error("client_id.txt doesn't contain a valid Client ID. Run the setup page again.");
+  }
+  return id;
+}
+
+function setConnError() { setConn("Could not load Google sign-in. Check your internet connection.", true); }
+
+function enableControls(on) {
+  ["refresh-btn", "prev-btn", "this-btn", "next-btn", "add-btn"].forEach(id => document.getElementById(id).disabled = !on);
+  document.getElementById("signin-btn").textContent = on ? "Reconnect" : "Connect Google Calendar";
+}
+function setConn(text, isErr) {
+  const el = document.getElementById("conn-msg");
+  el.textContent = text;
+  el.className = "msg" + (isErr ? " err" : "");
+}
+
+/* ---------- Google Calendar API ---------- */
+async function gcal(path, opts = {}) {
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(CAL_ID) + path, {
+    ...opts,
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json", ...(opts.headers || {}) }
+  });
+  if (res.status === 401) { token = null; enableControls(false); throw new Error("Session expired. Click Reconnect."); }
+  if (!res.ok) { const t = await res.text(); throw new Error("Google Calendar error " + res.status + ": " + t.slice(0, 160)); }
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadWeek() {
+  const end = addDays(weekStart, 7);
+  const q = new URLSearchParams({
+    timeMin: weekStart.toISOString(), timeMax: end.toISOString(),
+    singleEvents: "true", orderBy: "startTime", maxResults: "2500"
+  });
+  try {
+    setMsg("Loading this week from Google Calendar...");
+    const data = await gcal("/events?" + q.toString());
+    const items = (data.items || []).filter(e => e.status !== "cancelled");
+    events = items.filter(e => e.start && e.start.dateTime).map(normalize);
+    allDayEvents = items.filter(e => e.start && e.start.date).map(e => ({
+      id: e.id,
+      title: e.summary || "(no title)",
+      bucket: BUCKETS[e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.bucket] ? e.extendedProperties.private.bucket : null,
+      len: ALL_DAY_MIN
+    }));
+    setMsg("");
+    render();
+  } catch (err) { setMsg(err.message, true); }
+}
+
+function normalize(e) {
+  const s = new Date(e.start.dateTime), en = new Date(e.end.dateTime);
+  const b = e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.bucket;
+  const bucket = BUCKETS[b] ? b : null;
+  return {
+    id: e.id, recId: e.recurringEventId || null,
+    title: e.summary || "(no title)",
+    name: (e.summary || "").replace(/^\[(Sales|Admin|Prep)\]\s*/, ""),
+    bucket, queue: (e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.queue) || null,
+    start: s, end: en,
+    day: dayIndex(s), startMin: s.getHours() * 60 + s.getMinutes(),
+    len: Math.round((en - s) / 60000)
+  };
+}
+
+/* ---------- clash check and create ---------- */
+function findClash(candStart, candEnd) {
+  return events.find(ev => ev.start < candEnd && ev.end > candStart) || null;
+}
+
+const BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+let lastFreq = "once";
+
+function selectedDays() {
+  return Array.from(document.querySelectorAll('#f-days input[name="day"]:checked'))
+    .map(i => Number(i.value)).sort((a, b) => a - b);
+}
+
+function syncDayPicker() {
+  const f = document.getElementById("f-freq").value;
+  const boxes = Array.from(document.querySelectorAll('#f-days input[name="day"]'));
+  const hint = document.getElementById("days-hint");
+  if (f === "daily") {
+    boxes.forEach(b => { b.checked = true; b.disabled = true; });
+    hint.textContent = "Runs every day of the week.";
+  } else {
+    if (lastFreq === "daily") boxes.forEach(b => { b.checked = false; });
+    boxes.forEach(b => { b.disabled = false; });
+    if (f === "monthly") {
+      boxes.filter(b => b.checked).slice(1).forEach(b => { b.checked = false; });
+      hint.textContent = "Repeats on the same day each month. Pick one day.";
+    } else if (f === "weekly") {
+      hint.textContent = "Repeats every week on the days you tick.";
+    } else {
+      hint.textContent = "Creates one block for each day you tick.";
+    }
+  }
+  lastFreq = f;
+}
+
+document.getElementById("f-freq").addEventListener("change", syncDayPicker);
+document.getElementById("f-days").addEventListener("change", e => {
+  if (document.getElementById("f-freq").value === "monthly" && e.target.checked) {
+    document.querySelectorAll('#f-days input[name="day"]').forEach(b => { if (b !== e.target) b.checked = false; });
+  }
+});
+// Default to today's weekday
+document.querySelector('#f-days input[value="' + ((new Date().getDay() + 6) % 7) + '"]').checked = true;
+syncDayPicker();
+
+async function addBlock() {
+  setFormErr("");
+  const name = document.getElementById("f-name").value.trim();
+  const bucket = document.getElementById("f-bucket").value;
+  const freq = document.getElementById("f-freq").value;
+  const startStr = document.getElementById("f-start").value;
+  const len = Math.round(Number(document.getElementById("f-len").value));
+
+  if (!name) return setFormErr("Add a task name.");
+  if (!startStr) return setFormErr("Choose a start time.");
+  if (!len || len < 5) return setFormErr("Length must be at least 5 minutes.");
+  const [h, m] = startStr.split(":").map(Number);
+  const start = h * 60 + m;
+  if (start + len > 24 * 60) return setFormErr("This block runs past midnight. Shorten it or start earlier.");
+
+  const chosen = selectedDays();
+  if (freq !== "daily" && !chosen.length) return setFormErr("Tick at least one day.");
+  const days = freq === "daily" ? [0, 1, 2, 3, 4, 5, 6] : (freq === "monthly" ? [chosen[0]] : chosen);
+
+  // Clash check against every concrete time this block will occupy this week
+  for (const d of days) {
+    const cs = at(d, start), ce = at(d, start + len);
+    const clash = findClash(cs, ce);
+    if (clash) {
+      return setFormErr(`Clash on ${DAY_NAMES[dayIndex(cs)]} ${fmtT(cs)}–${fmtT(ce)}: overlaps "${clash.title}" (${fmtT(clash.start)}–${fmtT(clash.end)}). Pick another time.`);
+    }
+  }
+
+  const makeBody = (dayOffset, rrule) => {
+    const s = at(dayOffset, start), e = at(dayOffset, start + len);
+    const b = {
+      summary: BUCKETS[bucket].tag + " " + name,
+      colorId: BUCKETS[bucket].colorId,
+      extendedProperties: { private: { bucket, planner: "1" } },
+      start: { dateTime: s.toISOString(), timeZone: TZ },
+      end: { dateTime: e.toISOString(), timeZone: TZ }
+    };
+    if (rrule) b.recurrence = [rrule];
+    return b;
+  };
+
+  let bodies;
+  if (freq === "daily") bodies = [makeBody(0, "RRULE:FREQ=DAILY")];
+  else if (freq === "weekly") bodies = [makeBody(days[0], "RRULE:FREQ=WEEKLY;BYDAY=" + days.map(d => BYDAY[d]).join(","))];
+  else if (freq === "monthly") bodies = [makeBody(days[0], "RRULE:FREQ=MONTHLY")];
+  else bodies = days.map(d => makeBody(d, null));
+
+  try {
+    setFormBusy(true);
+    for (const body of bodies) await gcal("/events", { method: "POST", body: JSON.stringify(body) });
+    document.getElementById("f-name").value = "";
+    await loadWeek();
+    setMsg("Saved to Google Calendar.");
+  } catch (err) {
+    setFormErr(err.message);
+  } finally {
+    setFormBusy(false);
+  }
+}
+
+async function deleteBlock(ev) {
+  const isSeries = !!ev.recId;
+  const q = isSeries ? "This block repeats. Delete the whole repeating series from Google Calendar?" : "Delete \"" + ev.name + "\" from Google Calendar?";
+  if (!confirm(q)) return;
+  try {
+    await gcal("/events/" + encodeURIComponent(isSeries ? ev.recId : ev.id), { method: "DELETE" });
+    await loadWeek();
+    setMsg("Removed from Google Calendar.");
+  } catch (err) { setMsg(err.message, true); }
+}
+
+/* ---------- rendering ---------- */
+function setMsg(text, isErr) {
+  const el = document.getElementById("conn-msg");
+  if (!token && !text) return;
+  el.textContent = text;
+  el.className = "msg" + (isErr ? " err" : "");
+}
+function setFormErr(text) { document.getElementById("form-error").textContent = text; }
+function setFormBusy(b) { document.getElementById("add-btn").disabled = b; document.getElementById("add-btn").textContent = b ? "Saving..." : "Add to calendar"; }
+
+function render() {
+  const everything = [
+    ...events.map(e => ({ bucket: e.bucket, len: e.len })),
+    ...allDayEvents.map(e => ({ bucket: e.bucket, len: e.len }))
+  ];
+  const totals = { sales: 0, admin: 0, prep: 0, other: 0, all: 0 };
+  for (const e of everything) {
+    const k = e.bucket || "other";
+    totals[k] += e.len;
+    totals.all += e.len;
+  }
+  renderSummary(totals);
+  renderGrid();
+  const notes = allDayEvents.map(e => e.title);
+  document.getElementById("allday-note").textContent = notes.length
+    ? "All-day events this week (each counts as " + fmtHours(ALL_DAY_MIN) + "): " + notes.join(", ")
+    : "";
+  const end = addDays(weekStart, 6);
+  document.getElementById("week-label").textContent =
+    weekStart.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " – " +
+    end.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function renderSummary(t) {
+  const pct = t.all / WEEK_MIN * 100;
+  const r = Math.round(pct * 10) / 10;
+  document.getElementById("pct").textContent = r + "%";
+  document.getElementById("hrs").textContent = fmtHours(t.all) + " of 168 hours planned";
+  const meter = document.getElementById("meter");
+  document.getElementById("fill").style.width = Math.min(pct, 100) + "%";
+  meter.setAttribute("aria-valuenow", String(r));
+  meter.classList.toggle("over", pct > 65);
+  const st = document.getElementById("status");
+  if (pct > 65) { st.className = "status over"; st.textContent = "Over 65%. Remove or shorten something to keep room for the unplanned."; }
+  else if (pct >= 60) { st.className = "status in"; st.textContent = "In the 60–65% planning band. Good balance."; }
+  else if (t.all > 0) { st.className = "status"; st.style.color = "var(--muted)"; st.textContent = "Under 60%. You have room to add more."; }
+  else { st.className = "status"; st.style.color = "var(--muted)"; st.textContent = "Nothing planned yet."; }
+  const cards = [
+    ["sales", BUCKETS.sales.label, "var(--sales)"],
+    ["admin", BUCKETS.admin.label, "var(--admin)"],
+    ["prep", BUCKETS.prep.label, "var(--prep)"],
+    ["other", "Other / existing events", "var(--busy)"]
+  ];
+  document.getElementById("buckets").innerHTML = cards.map(([key, label, c]) => {
+    const p = Math.round(t[key] / WEEK_MIN * 1000) / 10;
+    return `<div class="bucket" style="--c:${c}"><div>${esc(label)}</div><div class="hrs">${fmtHours(t[key])}</div><div class="pct">${p}% of the week</div></div>`;
+  }).join("");
+}
+
+function renderGrid() {
+  const grid = document.getElementById("grid");
+  const gridH = 24 * HOUR_PX;
+  let html = `<div class="head" style="visibility:hidden">.</div>`;
+  for (let d = 0; d < 7; d++) html += `<div class="head">${DAY_NAMES[d].slice(0, 3)} ${addDays(weekStart, d).getDate()}</div>`;
+  html += `<div class="hours" style="height:${gridH}px">`;
+  for (let h = 0; h < 24; h++) html += `<div class="h" style="top:${h * HOUR_PX}px">${String(h).padStart(2, "0")}:00</div>`;
+  html += `</div>`;
+  for (let d = 0; d < 7; d++) {
+    html += `<div class="col" style="height:${gridH}px">`;
+    for (let h = 0; h < 24; h++) html += `<div class="tick" style="top:${h * HOUR_PX}px"></div>`;
+    for (const e of events.filter(x => x.day === d)) {
+      const top = e.startMin / 60 * HOUR_PX;
+      const height = Math.max(e.len / 60 * HOUR_PX, 18);
+      const cls = e.bucket ? "block mine" : "block busy";
+      const color = e.bucket === "sales" ? "var(--sales)" : e.bucket === "admin" ? "var(--admin)" : e.bucket === "prep" ? "var(--prep)" : "var(--busy)";
+      html += `<div class="${cls}" style="--c:${color};top:${top}px;height:${height}px" data-ev="${esc(e.id)}" role="${e.bucket ? "button" : "img"}" tabindex="${e.bucket ? 0 : -1}" title="${e.bucket ? "Click to delete" : "Event from Google Calendar"}">
+        <strong>${esc(e.bucket ? e.name : e.title)}</strong>
+        <small>${fmtT(e.start)}–${fmtT(e.end)}</small>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  grid.innerHTML = html;
+  grid.style.gridTemplateRows = "auto " + gridH + "px";
+}
+
+/* ---------- working hours, repeating tasks, auto-plot ---------- */
+const QUEUE_KEY = "weeklyPlanner.queue.v1";
+const AVAIL_KEY = "weeklyPlanner.availability.v1";
+// Preferred time windows, in minutes from midnight
+const PREF_WINDOWS = { morning: [6 * 60, 12 * 60], afternoon: [12 * 60, 17 * 60], evening: [17 * 60, 21 * 60], late: [21 * 60, 24 * 60] };
+const PREF_LABEL = { any: "Any time", morning: "Morning", afternoon: "Afternoon", evening: "Evening", late: "Late evening" };
+const DEFAULT_AVAIL = [0, 1, 2, 3, 4, 5, 6].map(i => ({ on: i < 5, start: "09:00", end: "18:00" }));
+
+function loadJSON(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
+}
+function hm(s) { const [h, m] = s.split(":").map(Number); return h * 60 + m; }
+function mToHM(m) { return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); }
+
+let queue = loadJSON(QUEUE_KEY, []);
+let availability = loadJSON(AVAIL_KEY, DEFAULT_AVAIL);
+let pendingPlan = null;
+
+function renderAvail() {
+  document.getElementById("avail-rows").innerHTML = DAY_NAMES.map((name, i) => {
+    const a = availability[i];
+    const dis = a.on ? "" : "disabled";
+    return `<div class="avail-row">
+      <span class="avail-day">${name.slice(0, 3)}</span>
+      <label class="chk"><input type="checkbox" data-av="${i}" data-k="on" ${a.on ? "checked" : ""}> Working</label>
+      <input type="time" data-av="${i}" data-k="start" value="${a.start}" ${dis} aria-label="${name} start">
+      <span>to</span>
+      <input type="time" data-av="${i}" data-k="end" value="${a.end}" ${dis} aria-label="${name} end">
+    </div>`;
+  }).join("");
+}
+
+function renderQueue() {
+  const el = document.getElementById("queue-list");
+  if (!queue.length) { el.innerHTML = `<p class="empty-note">No repeating tasks yet.</p>`; return; }
+  const rows = queue.map(q => `<tr>
+    <td>#${q.priority}</td>
+    <td>${esc(q.name)}</td>
+    <td>${esc(BUCKETS[q.bucket].label)}</td>
+    <td>${q.days.map(d => DAY_NAMES[d].slice(0, 3)).join(" ")}</td>
+    <td>${q.minutes} min a day</td>
+    <td>${PREF_LABEL[q.pref || "any"]}</td>
+    <td><button class="danger" type="button" data-q-remove="${esc(q.id)}">Remove</button></td>
+  </tr>`).join("");
+  el.innerHTML = `<div style="overflow-x:auto"><table class="list-table">
+    <thead><tr><th>Priority</th><th>Task</th><th>Bucket</th><th>Days</th><th>Time per day</th><th>Preferred time</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+function addQueueItem() {
+  const err = document.getElementById("q-error");
+  err.textContent = "";
+  const name = document.getElementById("q-name").value.trim();
+  const bucket = document.getElementById("q-bucket").value;
+  const priority = Math.round(Number(document.getElementById("q-prio").value));
+  const pref = document.getElementById("q-pref").value;
+  if (!priority || priority < 1) { err.textContent = "Priority must be a number, 1 or higher. 1 is the highest."; return; }
+  const minutes = Math.round(Number(document.getElementById("q-min").value));
+  const days = Array.from(document.querySelectorAll('#q-days input[name="qday"]:checked')).map(i => Number(i.value)).sort((a, b) => a - b);
+  if (!name) { err.textContent = "Add a task name."; return; }
+  if (!days.length) { err.textContent = "Tick at least one day."; return; }
+  if (!minutes || minutes < 5) { err.textContent = "Minutes per day must be at least 5."; return; }
+  queue.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, bucket, priority, pref, days, minutes });
+  saveJSON(QUEUE_KEY, queue);
+  document.getElementById("q-name").value = "";
+  renderQueue();
+}
+
+// Free intervals inside [wStart, wEnd] (minutes from midnight) not covered by busy intervals
+function freeGaps(busy, wStart, wEnd) {
+  const sorted = busy.filter(b => b.e > wStart && b.s < wEnd).sort((a, b) => a.s - b.s);
+  const gaps = [];
+  let cur = wStart;
+  for (const b of sorted) {
+    if (b.s > cur) gaps.push({ s: cur, e: Math.min(b.s, wEnd) });
+    cur = Math.max(cur, b.e);
+    if (cur >= wEnd) break;
+  }
+  if (cur < wEnd) gaps.push({ s: cur, e: wEnd });
+  return gaps.filter(g => g.e > g.s);
+}
+
+// Find a free slot for one item: preferred window first, then anywhere in working hours
+function findSlot(busy, wStart, wEnd, slotLen, pref) {
+  if (pref && pref !== "any" && PREF_WINDOWS[pref]) {
+    const [pS, pE] = PREF_WINDOWS[pref];
+    const s = Math.max(wStart, pS), e = Math.min(wEnd, pE);
+    if (e > s) {
+      const g = freeGaps(busy, s, e).find(g => g.e - g.s >= slotLen);
+      if (g) return { gap: g, inPref: true };
+    }
+  }
+  const g = freeGaps(busy, wStart, wEnd).find(g => g.e - g.s >= slotLen);
+  return g ? { gap: g, inPref: pref === "any" || !pref } : null;
+}
+
+// Fit repeating tasks into free time, highest priority (lowest number) first, one day at a time
+function buildPlan() {
+  const placed = [];
+  const shortfalls = [];
+  const byPriority = [...queue].sort((a, b) => a.priority - b.priority);
+  for (let d = 0; d < 7; d++) {
+    const av = availability[d];
+    const dayName = DAY_NAMES[d];
+    const wStart = hm(av.start), wEnd = hm(av.end);
+    const busy = events.filter(e => e.day === d).map(e => ({ s: e.startMin, e: e.startMin + e.len }));
+    for (const q of byPriority) {
+      if (!q.days.includes(d)) continue;
+      const already = events.filter(e => e.queue === q.id && e.day === d).length;
+      const need = already ? 0 : 1;
+      if (!need) continue;
+      if (!av.on || wEnd <= wStart) {
+        shortfalls.push({ name: q.name, day: dayName, missing: need, reason: "outside working hours" });
+        continue;
+      }
+      const slotLen = Math.max(5, Math.round(q.minutes));
+      let missing = 0;
+      for (let k = 0; k < need; k++) {
+        const found = findSlot(busy, wStart, wEnd, slotLen, q.pref);
+        if (!found) { missing = need - k; break; }
+        const gap = found.gap;
+        placed.push({ day: d, start: gap.s, len: slotLen, name: q.name, bucket: q.bucket, priority: q.priority, queueId: q.id, inPref: found.inPref });
+        busy.push({ s: gap.s, e: gap.s + slotLen });
+      }
+      if (missing) shortfalls.push({ name: q.name, day: dayName, missing, reason: "not enough free time" });
+    }
+  }
+  return { placed, shortfalls };
+}
+
+function setPlotMsg(text, isErr) {
+  const el = document.getElementById("plot-msg");
+  el.textContent = text; el.className = "msg" + (isErr ? " err" : "");
+}
+
+function previewPlan() {
+  if (!token) { setPlotMsg("Connect Google Calendar first.", true); return; }
+  if (!queue.length) { setPlotMsg("Add at least one repeating task first.", true); return; }
+  setPlotMsg("");
+  pendingPlan = buildPlan();
+  const { placed, shortfalls } = pendingPlan;
+  const rows = placed.slice().sort((a, b) => a.day - b.day || a.start - b.start);
+  let html = rows.length
+    ? `<p class="hint" style="margin-bottom:8px">${rows.length} new event${rows.length === 1 ? "" : "s"} to add this week.</p>
+       <div style="overflow-x:auto"><table class="list-table"><thead><tr><th>Day</th><th>Time</th><th>Task</th><th>Bucket</th><th>Priority #</th></tr></thead><tbody>
+       ${rows.map(p => `<tr><td>${DAY_NAMES[p.day]}</td><td>${mToHM(p.start)}–${mToHM(p.start + p.len)} (${p.len} min)${p.inPref ? "" : " <em>outside preferred time</em>"}</td><td>${esc(p.name)}</td><td>${esc(BUCKETS[p.bucket].label)}</td><td>#${p.priority}</td></tr>`).join("")}
+       </tbody></table></div>`
+    : `<p class="hint">Nothing new to add this week. Everything is already scheduled or there is no free time.</p>`;
+  if (shortfalls.length) {
+    html += `<p class="msg err" style="margin-top:12px">Could not place:</p><ul>` +
+      shortfalls.map(s => `<li>${esc(s.name)} on ${s.day}: ${s.missing} item${s.missing === 1 ? "" : "s"} (${s.reason})</li>`).join("") + `</ul>`;
+  }
+  document.getElementById("preview-body").innerHTML = html;
+  document.getElementById("confirm-plot").disabled = !rows.length;
+  document.getElementById("confirm-msg").textContent = "";
+  document.getElementById("preview").classList.remove("hidden");
+  document.getElementById("preview").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function plannedBody(p) {
+  const s = at(p.day, p.start), e = at(p.day, p.start + p.len);
+  return {
+    summary: BUCKETS[p.bucket].tag + " " + p.name,
+    colorId: BUCKETS[p.bucket].colorId,
+    extendedProperties: { private: { bucket: p.bucket, planner: "1", queue: p.queueId, autoplot: "1" } },
+    start: { dateTime: s.toISOString(), timeZone: TZ },
+    end: { dateTime: e.toISOString(), timeZone: TZ }
+  };
+}
+
+async function commitPlan() {
+  if (!pendingPlan || !pendingPlan.placed.length) return;
+  const btn = document.getElementById("confirm-plot");
+  const msg = document.getElementById("confirm-msg");
+  btn.disabled = true;
+  let saved = 0;
+  try {
+    for (const p of pendingPlan.placed) {
+      await gcal("/events", { method: "POST", body: JSON.stringify(plannedBody(p)) });
+      saved++;
+      msg.textContent = "Saved " + saved + " of " + pendingPlan.placed.length + "...";
+    }
+    pendingPlan = null;
+    document.getElementById("preview").classList.add("hidden");
+    await loadWeek();
+    setMsg("Added " + saved + " events to Google Calendar.");
+  } catch (err) {
+    msg.textContent = err.message + " Saved so far: " + saved + ". Preview again to continue.";
+    msg.className = "msg err";
+    await loadWeek();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initPlanExtras() {
+  renderAvail();
+  renderQueue();
+  document.getElementById("avail-rows").addEventListener("change", e => {
+    const i = Number(e.target.dataset.av), k = e.target.dataset.k;
+    if (k === "on") { availability[i].on = e.target.checked; renderAvail(); }
+    else availability[i][k] = e.target.value;
+  });
+  document.getElementById("avail-save").addEventListener("click", () => {
+    const msg = document.getElementById("avail-msg");
+    const bad = availability.findIndex(a => a.on && hm(a.end) <= hm(a.start));
+    if (bad >= 0) { msg.textContent = DAY_NAMES[bad] + ": end time must be after start time."; msg.className = "msg err"; return; }
+    msg.textContent = saveJSON(AVAIL_KEY, availability) ? "Saved." : "Could not save in this browser, so changes last only until reload.";
+    msg.className = "msg";
+  });
+  document.getElementById("q-add").addEventListener("click", addQueueItem);
+  document.getElementById("q-weekdays").addEventListener("click", () => setQDays([0, 1, 2, 3, 4]));
+  document.getElementById("q-everyday").addEventListener("click", () => setQDays([0, 1, 2, 3, 4, 5, 6]));
+  document.getElementById("q-clear").addEventListener("click", () => setQDays([]));
+  document.getElementById("queue-list").addEventListener("click", e => {
+    const id = e.target.getAttribute("data-q-remove");
+    if (!id) return;
+    queue = queue.filter(q => q.id !== id);
+    saveJSON(QUEUE_KEY, queue);
+    renderQueue();
+  });
+  document.getElementById("plot-btn").addEventListener("click", previewPlan);
+  document.getElementById("confirm-plot").addEventListener("click", commitPlan);
+  document.getElementById("cancel-plot").addEventListener("click", () => {
+    pendingPlan = null;
+    document.getElementById("preview").classList.add("hidden");
+  });
+}
+function setQDays(list) {
+  document.querySelectorAll('#q-days input[name="qday"]').forEach(b => { b.checked = list.includes(Number(b.value)); });
+}
+initPlanExtras();
+
+/* ---------- wiring ---------- */
+document.getElementById("add-btn").addEventListener("click", addBlock);
+document.getElementById("refresh-btn").addEventListener("click", loadWeek);
+document.getElementById("prev-btn").addEventListener("click", () => { weekStart = addDays(weekStart, -7); loadWeek(); });
+document.getElementById("next-btn").addEventListener("click", () => { weekStart = addDays(weekStart, 7); loadWeek(); });
+document.getElementById("this-btn").addEventListener("click", () => { weekStart = mondayOf(new Date()); loadWeek(); });
+document.getElementById("grid").addEventListener("click", e => {
+  const el = e.target.closest(".block.mine");
+  if (!el) return;
+  const ev = events.find(x => x.id === el.getAttribute("data-ev"));
+  if (ev) deleteBlock(ev);
+});
+document.getElementById("grid").addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("mine")) {
+    e.preventDefault();
+    const ev = events.find(x => x.id === e.target.getAttribute("data-ev"));
+    if (ev) deleteBlock(ev);
+  }
+});
+render();
+</script>
+</body>
+</html>

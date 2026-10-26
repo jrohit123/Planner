@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup: connect your Google Calendar</title>
+<style>
+:root {
+  --paper: #eef1ec; --card: #ffffff; --ink: #1b2a2f; --muted: #5d6b70; --line: #d5dcd6;
+  --accent: #3f5e8c; --ok: #2f7d3a; --warn: #b91c1c; --soft: #f6f8f5;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111a1d; --card: #182428; --ink: #e4ebe7; --muted: #9aa6a9; --line: #2b3b40;
+    --accent: #8fb0e0; --ok: #87c28a; --warn: #f87171; --soft: #1d2b30;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 28px 16px 56px; }
+h1 { font: 600 30px/1.2 Georgia, "Times New Roman", serif; margin: 0 0 8px; }
+h2 { font: 600 20px/1.3 Georgia, "Times New Roman", serif; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+.lead { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 20px; margin-top: 16px; }
+.step { border-left: 3px solid var(--line); padding: 4px 0 4px 16px; margin: 0; }
+.step + .step { margin-top: 22px; }
+.step.done { border-left-color: var(--ok); }
+.step-num { color: var(--accent); font-weight: 600; font-size: 14px; }
+ol, ul { padding-left: 20px; margin: 8px 0 12px; }
+li { margin-bottom: 6px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; word-break: break-all; }
+pre { background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; overflow-x: auto; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 8px 0 12px; }
+input[type="text"] { width: 100%; font: 15px ui-monospace, Menlo, Consolas, monospace; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; min-height: 44px; }
+button { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 9px 14px; min-height: 42px; cursor: pointer; }
+button.primary { background: var(--ink); color: var(--card); border-color: var(--ink); font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.note { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.status { font-weight: 600; margin-top: 10px; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--warn); }
+.warn-box { border: 1px solid var(--warn); border-radius: 6px; padding: 12px 14px; color: var(--ink); background: var(--soft); margin-top: 16px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect your Google Calendar</h1>
+  <p class="lead">This takes about 10 minutes and you only do it once. You'll create a permission key (called a Client ID) that lets the planner read and write your Google Calendar. Nothing is shared with anyone else.</p>
+
+  <div class="warn-box hidden" id="file-warning" role="alert">
+    <strong>This page is open as a plain file.</strong> Google sign-in and the saved key only work when the folder is served through a local server. Stop here and follow the instructions in the box below, then reload this page from the address it gives you.
+  </div>
+
+  <section class="card" aria-labelledby="before-h">
+    <h2 id="before-h">Before you start</h2>
+    <p>Keep all three files in the same folder: this setup page, the planner page, and the <code>client_id.txt</code> file you'll create in step 5.</p>
+    <p>Start a small local server in that folder. Open the Terminal (Mac) or Command Prompt (Windows), move into the folder, and run:</p>
+    <pre>python3 -m http.server 8000</pre>
+    <p class="note">On Windows, if <code>python3</code> doesn't work, try <code>python -m http.server 8000</code>. Leave this window open while you use the planner.</p>
+    <p>Then open this page at <code id="origin-display">http://localhost:8000/setup-client-id.html</code>.</p>
+  </section>
+
+  <section class="card" aria-labelledby="steps-h">
+    <h2 id="steps-h">Setup steps</h2>
+
+    <div class="step" id="s1">
+      <div class="step-num">Step 1</div>
+      <p><strong>Create a project in Google Cloud.</strong></p>
+      <ol>
+        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> and sign in with the Google account whose calendar you want to use.</li>
+        <li>At the top, click the project name, then <strong>New project</strong>.</li>
+        <li>Name it something like <em>Weekly Planner</em> and click <strong>Create</strong>. Make sure it is selected before continuing.</li>
+      </ol>
+    </div>
+
+    <div class="step" id="s2">
+      <div class="step-num">Step 2</div>
+      <p><strong>Turn on the Google Calendar API.</strong></p>
+      <ol>
+        <li>In the search bar at the top, type <em>Google Calendar API</em> and open it.</li>
+        <li>Click <strong>Enable</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="step" id="s3">
+      <div class="step-num">Step 3</div>
+      <p><strong>Set up the consent screen.</strong> This is the screen Google shows when you sign in.</p>
+      <ol>
+        <li>Go to <strong>Google Auth Platform</strong> (or <strong>APIs &amp; Services &rarr; OAuth consent screen</strong>) and click <strong>Get started</strong>.</li>
+        <li>App name: <em>Weekly Planner</em>. User support email: your own email address.</li>
+        <li>Audience: choose <strong>External</strong>, then continue.</li>
+        <li>Contact information: your email address. Accept the policy and click <strong>Create</strong>.</li>
+        <li>Open <strong>Audience</strong> in the left menu, scroll to <strong>Test users</strong>, click <strong>Add users</strong>, enter your Google email, and save.</li>
+      </ol>
+      <p class="note">Keeping the app in "Testing" is fine for personal use. Google may show a warning that the app isn't verified. Click <strong>Advanced</strong>, then continue, to proceed.</p>
+    </div>
+
+    <div class="step" id="s4">
+      <div class="step-num">Step 4</div>
+      <p><strong>Create the Client ID.</strong></p>
+      <ol>
+        <li>Go to <strong>Clients</strong> (or <strong>Credentials</strong>) and click <strong>Create client</strong>.</li>
+        <li>Application type: <strong>Web application</strong>. Name: <em>Planner</em>.</li>
+        <li>Under <strong>Authorized JavaScript origins</strong>, click <strong>Add URI</strong> and paste this address exactly:
+          <div class="row">
+            <code id="origin-copy">http://localhost:8000</code>
+            <button type="button" id="copy-origin">Copy</button>
+          </div>
+        </li>
+        <li>Leave the redirect URI section empty. Click <strong>Create</strong>.</li>
+        <li>A window shows your <strong>Client ID</strong>. It ends in <code>.apps.googleusercontent.com</code>. Copy it.</li>
+      </ol>
+    </div>
+
+    <div class="step" id="s5">
+      <div class="step-num">Step 5</div>
+      <p><strong>Save your Client ID.</strong></p>
+      <ol>
+        <li>Paste the Client ID into the box below.</li>
+      </ol>
+      <input type="text" id="client-id" placeholder="123456789-abc.apps.googleusercontent.com" autocomplete="off" spellcheck="false" aria-label="Client ID">
+      <div class="row">
+        <button class="primary" type="button" id="save-btn" disabled>Download client_id.txt</button>
+      </div>
+      <div class="status" id="save-status" role="status"></div>
+      <ol start="2">
+        <li>Your browser downloads a file called <code>client_id.txt</code>.</li>
+        <li>Move that file into the <strong>same folder</strong> as this page and the planner. If your browser saved it to Downloads, drag it across.</li>
+        <li>If a file with that name already exists, replace it.</li>
+      </ol>
+      <div class="status" id="file-status" role="status"></div>
+    </div>
+
+    <div class="step" id="s6">
+      <div class="step-num">Step 6</div>
+      <p><strong>Open the planner.</strong></p>
+      <ol>
+        <li>Click the button below, then click <strong>Connect Google Calendar</strong> and approve access with your Google account.</li>
+      </ol>
+      <div class="row">
+        <a href="weekly-planner.html"><button class="primary" type="button">Open the planner</button></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="trouble-h">
+    <h2 id="trouble-h">If something goes wrong</h2>
+    <ul>
+      <li><strong>"Access blocked" or "redirect_uri / origin mismatch":</strong> the address in Step 4 doesn't match the address in your browser. Check it's exactly <code>http://localhost:8000</code> with no trailing slash, then wait a few minutes and try again.</li>
+      <li><strong>"Client_id.txt was not found":</strong> the file isn't in the same folder as the planner, or it has a different name. Check it's called <code>client_id.txt</code>, not <code>client_id.txt.txt</code>.</li>
+      <li><strong>"Access not granted" or "app is in testing":</strong> add your email under Test users in Step 3.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+const ORIGIN = window.location.origin;
+const IS_FILE = window.location.protocol === "file:";
+const ID_PATTERN = /^[0-9A-Za-z._-]+\.apps\.googleusercontent\.com$/;
+const input = document.getElementById("client-id");
+const saveBtn = document.getElementById("save-btn");
+
+if (IS_FILE) {
+  document.getElementById("file-warning").classList.remove("hidden");
+} else {
+  document.getElementById("origin-display").textContent = ORIGIN + "/setup-client-id.html";
+  document.getElementById("origin-copy").textContent = ORIGIN;
+}
+
+// Show whether a client_id.txt is already in place
+async function checkExisting() {
+  if (IS_FILE) return;
+  try {
+    const res = await fetch("client_id.txt", { cache: "no-store" });
+    if (!res.ok) throw new Error();
+    const id = (await res.text()).trim();
+    if (ID_PATTERN.test(id)) {
+      setFile("ok", "client_id.txt is already in this folder. You can open the planner, or paste a new Client ID to replace it.");
+    }
+  } catch (e) { /* not there yet */ }
+}
+
+function setFile(kind, text) {
+  const el = document.getElementById("file-status");
+  el.textContent = text;
+  el.className = "status " + (kind || "");
+}
+
+input.addEventListener("input", () => {
+  const v = input.value.trim();
+  saveBtn.disabled = !v;
+  const el = document.getElementById("save-status");
+  if (!v) { el.textContent = ""; return; }
+  if (ID_PATTERN.test(v)) { el.textContent = "That looks right."; el.className = "status ok"; }
+  else { el.textContent = "This doesn't look like a Client ID. It should end in .apps.googleusercontent.com."; el.className = "status err"; }
+  saveBtn.disabled = !ID_PATTERN.test(v);
+});
+
+saveBtn.addEventListener("click", () => {
+  const id = input.value.trim();
+  if (!ID_PATTERN.test(id)) return;
+  const blob = new Blob([id + "\n"], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "client_id.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setFile("", "Downloaded. Now move client_id.txt into the same folder as the planner (step 5, point 2).");
+});
+
+document.getElementById("copy-origin").addEventListener("click", async () => {
+  const btn = document.getElementById("copy-origin");
+  try {
+    await navigator.clipboard.writeText(ORIGIN);
+    btn.textContent = "Copied";
+  } catch (e) {
+    btn.textContent = "Select and copy manually";
+  }
+  setTimeout(() => (btn.textContent = "Copy"), 2000);
+});
+
+checkExisting();
+</script>
+</body>
+</html>
