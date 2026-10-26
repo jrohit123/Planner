@@ -97,7 +97,7 @@ button.danger { color: var(--warn); background: transparent; border-color: trans
       <span id="week-label" style="color:var(--muted)"></span>
     </div>
     <div class="msg" id="conn-msg">Not connected. Connect to load this week's events.</div>
-    <p class="msg"><a id="setup-link" href="setup-client-id.html" hidden>Open the setup page</a></p>
+    <p class="msg"><a id="setup-link" href="index.html" hidden>Open the setup page</a></p>
   </section>
 
   <section class="card" aria-labelledby="cap-h">
@@ -149,7 +149,7 @@ button.danger { color: var(--warn); background: transparent; border-color: trans
           <span class="hint" id="days-hint"></span>
         </fieldset>
         <label>Start
-          <input id="f-start" type="time" value="09:00">
+          <input id="f-start" type="time" value="10:00">
         </label>
         <label>Length (minutes)
           <input id="f-len" type="number" min="5" max="1440" step="5" value="60">
@@ -591,9 +591,9 @@ function renderGrid() {
 const QUEUE_KEY = "weeklyPlanner.queue.v1";
 const AVAIL_KEY = "weeklyPlanner.availability.v1";
 // Preferred time windows, in minutes from midnight
-const PREF_WINDOWS = { morning: [6 * 60, 12 * 60], afternoon: [12 * 60, 17 * 60], evening: [17 * 60, 21 * 60], late: [21 * 60, 24 * 60] };
+const PREF_WINDOWS = { morning: [6 * 60, 12 * 60], afternoon: [12 * 60, 15 * 60], evening: [15 * 60, 19 * 60], late: [19 * 60, 24 * 60] };
 const PREF_LABEL = { any: "Any time", morning: "Morning", afternoon: "Afternoon", evening: "Evening", late: "Late evening" };
-const DEFAULT_AVAIL = [0, 1, 2, 3, 4, 5, 6].map(i => ({ on: i < 5, start: "09:00", end: "18:00" }));
+const DEFAULT_AVAIL = [0, 1, 2, 3, 4, 5, 6].map(i => ({ on: i < 5, start: "10:00", end: "19:00" }));
 
 function loadJSON(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
