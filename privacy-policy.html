@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Privacy Policy for the Planner weekly time-planning application.">
+  <title>Privacy Policy | Planner</title>
+  <style>
+:root{color-scheme:light;--ink:#182230;--muted:#5b6675;--line:#dce2e9;--paper:#f5f7fa;--accent:#2457a7}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line)}.top{max-width:900px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{font-weight:750;letter-spacing:.01em}.nav{display:flex;gap:16px;flex-wrap:wrap}.nav a{color:var(--accent);text-decoration:none}
+main{max-width:900px;margin:42px auto;padding:0 24px 56px}.eyebrow{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.09em;font-size:.78rem}
+h1{font-size:clamp(2rem,5vw,3rem);line-height:1.12;margin:.3em 0}h2{font-size:1.35rem;margin-top:2rem}p,li{color:#303b49}
+.updated{color:var(--muted);font-size:.92rem}.notice{border-left:4px solid var(--accent);padding:12px 16px;background:#fff;border-radius:4px;margin:24px 0}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;padding:24px;text-align:center}a{color:var(--accent)}code{background:#e9edf3;padding:2px 5px;border-radius:4px}
+@media(max-width:600px){main{margin:26px auto}.top{padding:16px 20px}}
+</style>
+</head>
+<body>
+  <header><div class="top">
+    <div class="brand">Planner</div>
+    <nav class="nav" aria-label="Legal navigation">
+      <a href="index.html">Home</a>
+      <a href="privacy-policy.html">Privacy Policy</a>
+      <a href="terms-of-service.html">Application Terms of Service</a>
+    </nav>
+  </div></header>
+  <main>
+    <div class="eyebrow">Planner · Legal</div>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: October 26, 2026</p>
+    
+<p>This Privacy Policy explains how the Planner weekly time-planning application (the “App”) handles information when you use it. The App is maintained by the repository owner of <a href="https://github.com/jrohit123/Planner">github.com/jrohit123/Planner</a> (“we,” “us,” or “our”).</p>
+<div class="notice"><strong>In brief:</strong> The App connects to your Google Calendar using Google’s authorization flow. Calendar event information is requested from Google and new or deleted planner blocks are sent directly to Google Calendar. Your repeating-task queue and working-hours preferences are stored in your browser on the device and browser profile you use.</div>
+
+<h2>1. Information the App handles</h2>
+<ul>
+  <li><strong>Google Calendar event information.</strong> After you choose to connect, the App reads calendar events for the selected week to display your schedule and check for conflicts. This can include event titles, dates, times, event identifiers, and recurrence information made available by the Google Calendar API.</li>
+  <li><strong>Calendar changes you request.</strong> When you add or auto-schedule planner blocks, the App sends the event details you enter to Google Calendar. If you choose to delete a planner block, the App sends a deletion request to Google Calendar.</li>
+  <li><strong>Planner preferences.</strong> The App stores the repeating-task queue and working-hours/availability settings in your browser’s local storage so they can be remembered on that browser. These settings are not automatically synced by the App to a separate database.</li>
+  <li><strong>Authentication data.</strong> Google’s authorization flow supplies an access token used by the App to make Calendar API requests. The current implementation keeps this token in the active page’s memory; refreshing or closing the page may require reconnecting.</li>
+  <li><strong>Hosting and technical data.</strong> The website host (for example, GitHub Pages if used for deployment) and Google may process technical information such as connection logs, IP address, browser details, and security telemetry under their own policies.</li>
+</ul>
+
+<h2>2. How information is used</h2>
+<p>Information is used only to provide the App’s planning functions: displaying your calendar, checking for schedule conflicts, calculating available time, creating requested calendar events, and deleting planner blocks when you ask. We do not operate a separate application server or database to collect your calendar data as part of the current client-side implementation.</p>
+
+<h2>3. Google Calendar and third parties</h2>
+<p>The App uses Google sign-in/authorization and the Google Calendar API. When you connect, information is exchanged directly between your browser and Google’s services. Google’s processing of information is governed by Google’s own terms and privacy policy. Review <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google’s Privacy Policy</a> and <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google Account third-party access settings</a>.</p>
+<p>We do not sell your personal information. The App does not intentionally send your calendar contents to an analytics, advertising, or data-broker service. This statement describes the current implementation and should be revisited if integrations or hosting arrangements change.</p>
+
+<h2>4. Storage, retention, and deletion</h2>
+<ul>
+  <li>Planner preferences remain in the browser’s local storage until you clear the site’s data, use browser controls to remove it, or the browser removes it.</li>
+  <li>Calendar events you create or delete are retained or removed in your Google Calendar according to the action you confirm and Google’s own retention and recovery behavior.</li>
+  <li>Disconnecting or closing the page stops the current page from making further requests with its in-memory token, but it does not delete events already in Google Calendar or automatically clear browser local storage.</li>
+  <li>To revoke access, visit your <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google Account permissions</a>. To remove local preferences, clear site data for the App in your browser.</li>
+</ul>
+
+<h2>5. Security</h2>
+<p>The App uses Google’s authorization flow and HTTPS when deployed on a secure HTTPS origin. No web application can guarantee absolute security. Keep your Google account secure, review requested permissions before granting them, and avoid using the App on devices or browser profiles you do not control.</p>
+
+<h2>6. Children</h2>
+<p>The App is a general-purpose planning tool and is not specifically directed to children. If you believe a child has provided personal information through a service we control, contact us using the details below.</p>
+
+<h2>7. Your choices and privacy rights</h2>
+<p>You can choose not to connect Google Calendar, revoke Google access, clear browser-stored preferences, and manage or delete events directly in Google Calendar. Depending on where you live, you may have additional privacy rights under applicable law. Contact us to ask a question or submit a privacy request.</p>
+
+<h2>8. International use and changes</h2>
+<p>Google and the hosting provider may process information in countries other than your own, subject to their terms and safeguards. We may update this Policy when the App changes. The “Last updated” date above indicates the latest revision; continued use after an update means you have had an opportunity to review the revised Policy, to the extent permitted by law.</p>
+
+<h2>9. Contact</h2>
+<p>Privacy contact: <strong>jrohit123@gmail.com</strong><br>
+Maintainer/legal entity: <strong>Rohit Jain</strong></p>
+<p class="updated">Before publishing, replace the bracketed contact details and confirm this Policy matches the deployed code, Google OAuth scopes, and hosting setup.</p>
+
+  </main>
+  <footer>Planner · <a href="privacy-policy.html">Privacy</a> · <a href="terms-of-service.html">Terms</a></footer>
+</body>
+</html>
