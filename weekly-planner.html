@@ -8,14 +8,14 @@
 <style>
 :root {
   --paper: #eef1ec; --card: #ffffff; --ink: #1b2a2f; --muted: #5d6b70; --line: #d5dcd6;
-  --sales: #c2410c; --admin: #3f5e8c; --prep: #4d7c4f; --busy: #9aa3a6;
+  --sales: #c2410c; --admin: #3f5e8c; --prep: #4d7c4f; --personal: #9aa3a6;
   --warn: #b91c1c; --target: #4d7c4f;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper: #111a1d; --card: #182428; --ink: #e4ebe7; --muted: #9aa6a9; --line: #2b3b40;
-    --sales: #f08a4b; --admin: #8fb0e0; --prep: #87c28a; --busy: #5d6b70;
+    --sales: #f08a4b; --admin: #8fb0e0; --prep: #87c28a; --personal: #5d6b70;
     --warn: #f87171; --target: #87c28a;
     color-scheme: dark;
   }
@@ -127,7 +127,7 @@ button.danger { color: var(--warn); background: transparent; border-color: trans
             <option value="sales">Sales activities</option>
             <option value="admin">Admin activities</option>
             <option value="prep">Procurement/Preparation</option>
-            <option value="prep">Personal</option>
+            <option value="personal">Personal</option>
           </select>
         </label>
         <label>Repeats
@@ -264,7 +264,7 @@ const BUCKETS = {
   sales: { label: "Sales activities", tag: "[Sales]", colorId: "6" },
   admin: { label: "Admin activities", tag: "[Admin]", colorId: "9" },
   prep:  { label: "Procurement/Preparation", tag: "[Prep]", colorId: "10" },
-  personal:  { label: "Personal events", tag: "[Personal]", colorId: "11" }
+  personal:  { label: "Personal", tag: "[Personal]", colorId: "11" }
 };
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const FREQ_LABEL = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
@@ -380,7 +380,7 @@ function normalize(e) {
   return {
     id: e.id, recId: e.recurringEventId || null,
     title: e.summary || "(no title)",
-    name: (e.summary || "").replace(/^\[(Sales|Admin|Prep)\]\s*/, ""),
+    name: (e.summary || "").replace(/^\[(Sales|Admin|Prep|Personal)\]\s*/, ""),
     bucket, queue: (e.extendedProperties && e.extendedProperties.private && e.extendedProperties.private.queue) || null,
     start: s, end: en,
     day: dayIndex(s), startMin: s.getHours() * 60 + s.getMinutes(),
@@ -446,7 +446,7 @@ async function addBlock() {
   if (!len || len < 5) return setFormErr("Length must be at least 5 minutes.");
   const [h, m] = startStr.split(":").map(Number);
   const start = h * 60 + m;
-  if (start + len > 24 * 60) return setFormErr("This block runs past midnight. Shorten it or start earlier.");
+  if (start + len > 24 * 60 && !confirm("This block runs past midnight. Add it anyway?")) return;
 
   const chosen = selectedDays();
   if (freq !== "daily" && !chosen.length) return setFormErr("Tick at least one day.");
