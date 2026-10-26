@@ -186,7 +186,7 @@ button.danger { color: var(--warn); background: transparent; border-color: trans
           <option value="sales">Sales activities</option>
           <option value="admin">Admin activities</option>
           <option value="prep">Procurement/Preparation</option>
-          <option value="busy">Personal</option>
+          <option value="personal">Personal</option>
         </select>
       </label>
       <label>Priority (1 = highest)
@@ -244,7 +244,7 @@ button.danger { color: var(--warn); background: transparent; border-color: trans
       <span><span class="swatch" style="--c:var(--sales)"></span>Sales</span>
       <span><span class="swatch" style="--c:var(--admin)"></span>Admin</span>
       <span><span class="swatch" style="--c:var(--prep)"></span>Procurement/Preparation</span>
-      <span><span class="swatch" style="--c:var(--busy)"></span>Personal events</span>
+      <span><span class="swatch" style="--c:var(--personal)"></span>Personal events</span>
     </div>
     <div class="grid-wrap"><div class="grid" id="grid"></div></div>
     <p class="hint" id="allday-note"></p>
@@ -264,7 +264,7 @@ const BUCKETS = {
   sales: { label: "Sales activities", tag: "[Sales]", colorId: "6" },
   admin: { label: "Admin activities", tag: "[Admin]", colorId: "9" },
   prep:  { label: "Procurement/Preparation", tag: "[Prep]", colorId: "10" },
-  busy:  { label: "Personal events", tag: "[Personal]", colorId: "11" }
+  personal:  { label: "Personal events", tag: "[Personal]", colorId: "11" }
 };
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const FREQ_LABEL = { once: "Once", daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
@@ -555,7 +555,7 @@ function renderSummary(t) {
     ["sales", BUCKETS.sales.label, "var(--sales)"],
     ["admin", BUCKETS.admin.label, "var(--admin)"],
     ["prep", BUCKETS.prep.label, "var(--prep)"],
-    ["personal", BUCKETS.personal.label, "var(--busy)"]
+    ["personal", BUCKETS.personal.label, "var(--personal)"]
   ];
   document.getElementById("buckets").innerHTML = cards.map(([key, label, c]) => {
     const p = Math.round(t[key] / WEEK_MIN * 1000) / 10;
@@ -578,7 +578,7 @@ function renderGrid() {
       const top = e.startMin / 60 * HOUR_PX;
       const height = Math.max(e.len / 60 * HOUR_PX, 18);
       const cls = e.bucket ? "block mine" : "block busy";
-      const color = e.bucket === "sales" ? "var(--sales)" : e.bucket === "admin" ? "var(--admin)" : e.bucket === "prep" ? "var(--prep)" : "var(--busy)";
+      const color = e.bucket === "sales" ? "var(--sales)" : e.bucket === "admin" ? "var(--admin)" : e.bucket === "prep" ? "var(--prep)" : "var(--personal)";
       html += `<div class="${cls}" style="--c:${color};top:${top}px;height:${height}px" data-ev="${esc(e.id)}" role="${e.bucket ? "button" : "img"}" tabindex="${e.bucket ? 0 : -1}" title="${e.bucket ? "Click to delete" : "Event from Google Calendar"}">
         <strong>${esc(e.bucket ? e.name : e.title)}</strong>
         <small>${fmtT(e.start)}–${fmtT(e.end)}</small>
