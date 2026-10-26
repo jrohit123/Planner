@@ -63,7 +63,7 @@ a { color: var(--accent); }
     <p>Start a small local server in that folder. Open the Terminal (Mac) or Command Prompt (Windows), move into the folder, and run:</p>
     <pre>python3 -m http.server 8000</pre>
     <p class="note">On Windows, if <code>python3</code> doesn't work, try <code>python -m http.server 8000</code>. Leave this window open while you use the planner.</p>
-    <p>Then open this page at <code id="origin-display">http://localhost:8000/setup-client-id.html</code>.</p>
+    <p>Then open this page at <code id="origin-display">http://localhost:8000/index.html</code>.</p>
   </section>
 
   <section class="card" aria-labelledby="steps-h">
@@ -169,7 +169,7 @@ const saveBtn = document.getElementById("save-btn");
 if (IS_FILE) {
   document.getElementById("file-warning").classList.remove("hidden");
 } else {
-  document.getElementById("origin-display").textContent = ORIGIN + "/setup-client-id.html";
+  document.getElementById("origin-display").textContent = ORIGIN + "/index.html";
   document.getElementById("origin-copy").textContent = ORIGIN;
 }
 
