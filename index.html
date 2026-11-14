@@ -136,7 +136,7 @@ button:disabled { opacity: .5; cursor: default; }
 
   <section class="card" aria-labelledby="q-h">
     <h2 id="q-h">Tasks To Plan</h2>
-    <p class="hint">Add one or more tasks to the list. Leave the start time empty to place a task in free time automatically, or enter a start time to pin it. Plotting only applies to the week shown above, so use the week arrows to move to another week first.</p>
+    <p class="hint">Add one or more tasks to the list. Leave the start time empty to place a task in free time automatically, or enter a start time to pin it. Weekly tasks plot only the week shown above. Other repeats plot from their start date to their end date, so set an end date if you want one.</p>
     <div class="add" style="margin-top:12px">
       <label>Task
         <input id="t-name" type="text" maxlength="80" placeholder="e.g. Sales calls">
@@ -197,19 +197,16 @@ button:disabled { opacity: .5; cursor: default; }
             <option value="year">year(s)</option>
           </select>
         </label>
-        <label>Ends
-          <select id="t-ends">
-            <option value="never">Never</option>
-            <option value="until">On a date</option>
-            <option value="count">After a number of times</option>
-          </select>
-        </label>
-        <label class="hidden" id="t-until-wrap">Until
+      </fieldset>
+      <fieldset class="days hidden" id="t-ends-wrap">
+        <legend>Ends (optional)</legend>
+        <label>End date
           <input id="t-until" type="date">
         </label>
-        <label class="hidden" id="t-count-wrap">Times
-          <input id="t-count" type="number" min="1" max="999" step="1" value="10" style="width:110px">
+        <label>Or after this many times
+          <input id="t-count" type="number" min="1" max="999" step="1" placeholder="No limit" style="width:140px">
         </label>
+        <p class="hint" style="width:100%">Leave both empty for no end date. Tasks with no end date will ask you to confirm before they are plotted.</p>
       </fieldset>
     </div>
     <div class="row" style="margin-top:12px">
@@ -218,7 +215,7 @@ button:disabled { opacity: .5; cursor: default; }
     </div>
     <div id="queue-list" style="margin-top:12px"></div>
     <div class="row" style="margin-top:12px">
-      <button class="primary" id="plot-btn" type="button" disabled>Preview plot for the week shown</button>
+      <button class="primary" id="plot-btn" type="button" disabled>Preview plot</button>
       <span class="msg" id="plot-msg"></span>
     </div>
   </section>
@@ -444,7 +441,7 @@ function normalize(e) {
     name: (e.summary || "").replace(/^\[(Sales|Admin|Prep)\]\s*/, ""),
     bucket, queue: priv.queue || null,
     start: s, end: en,
-    day: dayIndex(s), startMin: s.getHours() * 60 + s.getMinutes(),
+    key: isoOf(s), day: dayIndex(s), startMin: s.getHours() * 60 + s.getMinutes(),
     len: Math.round((en - s) / 60000)
   };
 }
@@ -487,9 +484,9 @@ function occursOn(t, date) {
   const start = parseISODate(t.startDate);
   const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   if (day < start) return false;
-  if (t.repeat === "custom" && t.ends === "until" && t.until && day > parseISODate(t.until)) return false;
+  if (t.ends === "until" && t.until && day > parseISODate(t.until)) return false;
   if (!baseMatch(t, start, day)) return false;
-  if (t.repeat === "custom" && t.ends === "count" && t.count) {
+  if (t.ends === "count" && t.count) {
     let n = 0;
     for (let x = new Date(start); x <= day; x = addDays(x, 1)) {
       if (baseMatch(t, start, x) && ++n > t.count) return false;
@@ -500,25 +497,65 @@ function occursOn(t, date) {
 
 function repeatText(t) {
   const dayList = () => effDays(t, startWdOf(t)).map(d => DAY_NAMES[d].slice(0, 3)).join(", ");
+  let s;
   switch (t.repeat) {
     case "none": return "Does not repeat";
-    case "daily": return "Daily";
-    case "weekdays": return "Every weekday";
-    case "weekly": return "Weekly on " + dayList();
-    case "monthly": return "Monthly on day " + parseISODate(t.startDate).getDate();
-    case "yearly": return "Yearly";
-    case "custom": {
-      let s = "Every " + (t.interval || 1) + " " + UNIT_LABEL[t.unit];
+    case "daily": s = "Daily"; break;
+    case "weekdays": s = "Every weekday"; break;
+    case "weekly": s = "Weekly on " + dayList(); break;
+    case "monthly": s = "Monthly on day " + parseISODate(t.startDate).getDate(); break;
+    case "yearly": s = "Yearly"; break;
+    case "custom":
+      s = "Every " + (t.interval || 1) + " " + UNIT_LABEL[t.unit];
       if (t.unit === "week") s += " on " + dayList();
-      if (t.ends === "until") s += ", until " + t.until;
-      if (t.ends === "count") s += ", " + t.count + " times";
-      return s;
-    }
+      break;
+    default: s = "";
   }
-  return "";
+  if (t.ends === "until" && t.until) s += ", until " + t.until;
+  else if (t.ends === "count" && t.count) s += ", " + t.count + " times";
+  else s += ", no end date";
+  return s;
 }
 
-/* ===================== Plotting (displayed week only) ===================== */
+/* ===================== Plotting (range based) ===================== */
+const NO_END_MONTHS = 12;
+
+function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, d.getDate()); }
+
+function setPlotMsg(text, isErr) { el("plot-msg").textContent = text; el("plot-msg").className = "msg" + (isErr ? " err" : ""); }
+
+function fmtDate(d) { return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" }); }
+
+// The dates a task may be plotted on.
+// Weekly: only the week shown. Does not repeat: its start date. Others: start date (or today) to end date.
+function taskRange(t) {
+  const start = parseISODate(t.startDate);
+  if (t.repeat === "none") return { from: start, to: start };
+  if (t.repeat === "weekly") return { from: weekStart, to: addDays(weekStart, 6) };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const from = start > today ? start : today;
+  if (t.ends === "until" && t.until) return { from, to: parseISODate(t.until) };
+  if (t.ends === "count" && t.count) {
+    let n = 0, last = start;
+    for (let x = new Date(start); n < t.count && dayDiff(start, x) < 3660; x = addDays(x, 1)) {
+      if (baseMatch(t, start, x)) { n++; last = x; }
+    }
+    return { from, to: last < from ? from : last };
+  }
+  return { from, to: addMonths(from, NO_END_MONTHS) };
+}
+
+async function fetchEventsBetween(from, to) {
+  let all = [], pageToken = "";
+  do {
+    const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "2500" });
+    if (pageToken) q.set("pageToken", pageToken);
+    const data = await gcal("/events?" + q.toString());
+    all = all.concat(data.items || []);
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+  return all.filter(e => e.status !== "cancelled");
+}
 function findSlot(busy, wStart, wEnd, slotLen, pref) {
   const win = pref && pref !== "any" ? prefWindow(pref) : null;
   if (win) {
@@ -549,31 +586,35 @@ function freeGaps(busy, wStart, wEnd) {
 // Works only on the 7 days of the displayed week.
 // Pinned tasks (with a start time) are placed at that time, with clashes flagged.
 // Other tasks fill free time inside working hours, preferred window first.
-function buildPlan() {
+function buildPlan(from, to, timed) {
   const placed = [], shortfalls = [];
   const sorted = [...queue].sort((a, b) => a.priority - b.priority);
-  for (let d = 0; d < 7; d++) {
-    const date = addDays(weekStart, d);
-    const dayEvents = events.filter(e => e.day === d);
+  const ranges = new Map(queue.map(t => [t.id, taskRange(t)]));
+  for (let date = new Date(from); date <= to; date = addDays(date, 1)) {
+    const key = isoOf(date);
+    const wd = (date.getDay() + 6) % 7;
+    const dayEvents = timed.filter(e => e.key === key);
     const busy = dayEvents.map(e => ({ s: e.startMin, e: e.startMin + e.len, title: e.title }));
-    const av = availability[d];
+    const av = availability[wd];
     const wStart = hm(av.start), wEnd = hm(av.end);
     for (const t of sorted) {
+      const r = ranges.get(t.id);
+      if (date < r.from || date > r.to) continue;
       if (!occursOn(t, date)) continue;
-      const alreadyThere = dayEvents.some(e => e.queue === t.id) || placed.some(p => p.queueId === t.id && p.day === d);
+      const alreadyThere = dayEvents.some(e => e.queue === t.id) || placed.some(p => p.queueId === t.id && p.key === key);
       if (alreadyThere) continue;
 
       if (t.start) {
         const s = hm(t.start), e = s + t.minutes;
         const clash = busy.find(b => b.s < e && b.e > s) || null;
-        placed.push({ day: d, start: s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
+        placed.push({ key, start: s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
           queueId: t.id, fixed: true, clashWith: clash ? clash.title : null, inPref: true, task: t });
         busy.push({ s, e, title: t.name });
       } else {
-        if (!av.on || wEnd <= wStart) { shortfalls.push({ name: t.name, day: DAY_NAMES[d], reason: "not a working day" }); continue; }
+        if (!av.on || wEnd <= wStart) { shortfalls.push({ name: t.name, day: DAY_NAMES[wd] + " " + key, reason: "not a working day" }); continue; }
         const found = findSlot(busy, wStart, wEnd, t.minutes, t.pref);
-        if (!found) { shortfalls.push({ name: t.name, day: DAY_NAMES[d], reason: "not enough free time" }); continue; }
-        placed.push({ day: d, start: found.gap.s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
+        if (!found) { shortfalls.push({ name: t.name, day: DAY_NAMES[wd] + " " + key, reason: "not enough free time" }); continue; }
+        placed.push({ key, start: found.gap.s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
           queueId: t.id, fixed: false, clashWith: null, inPref: found.inPref, task: t });
         busy.push({ s: found.gap.s, e: found.gap.s + t.minutes, title: t.name });
       }
@@ -582,20 +623,48 @@ function buildPlan() {
   return { placed, shortfalls };
 }
 
-function previewPlan() {
-  if (!tokenClient) { el("plot-msg").textContent = "Google sign-in is not ready yet."; el("plot-msg").className = "msg err"; return; }
-  el("plot-msg").textContent = "";
-  pendingPlan = buildPlan();
-  pendingPlan.allowed = new Set();
+async function previewPlan() {
+  if (!tokenClient || !token) { setPlotMsg("Connect Google Calendar first.", true); return; }
+  if (!queue.length) return;
+
+  const open = queue.filter(t => t.repeat !== "none" && t.repeat !== "weekly" && t.ends !== "until" && t.ends !== "count");
+  if (open.length) {
+    const ok = confirm("No end date is set for:\n\n" + open.map(t => "• " + t.name).join("\n") +
+      "\n\nThese will be plotted for the next " + NO_END_MONTHS + " months from their start date. Continue?");
+    if (!ok) { setPlotMsg("Set an end date, or confirm, to plot these tasks.", true); return; }
+  }
+
+  const ranges = queue.map(taskRange);
+  const from = new Date(Math.min(...ranges.map(r => r.from.getTime())));
+  const to = new Date(Math.max(...ranges.map(r => r.to.getTime())));
+
+  el("plot-btn").disabled = true;
+  setPlotMsg("Reading your calendar...");
+  try {
+    const raw = await fetchEventsBetween(from, addDays(to, 1));
+    const timed = raw.filter(e => e.start && e.start.dateTime).map(normalize);
+    pendingPlan = buildPlan(from, to, timed);
+    pendingPlan.allowed = new Set();
+    setPlotMsg("");
+    renderPreview(from, to);
+  } catch (err) {
+    setPlotMsg(err.message, true);
+  } finally {
+    el("plot-btn").disabled = !queue.length || !token;
+  }
+}
+
+function renderPreview(from, to) {
   const { placed, shortfalls } = pendingPlan;
-  const indexed = placed.map((p, i) => ({ p, i })).sort((a, b) => a.p.day - b.p.day || a.p.start - b.p.start);
+  const indexed = placed.map((p, i) => ({ p, i })).sort((a, b) => a.p.key.localeCompare(b.p.key) || a.p.start - b.p.start);
+  const span = fmtDate(from) + " to " + fmtDate(to);
 
   let html = indexed.length
-    ? `<p class="hint" style="margin-bottom:8px">Week of ${weekStart.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</p>
-       <div style="overflow-x:auto"><table class="list-table">
-        <thead><tr><th>Day</th><th>Time</th><th>Task</th><th>Type</th><th>Priority</th><th>Status</th></tr></thead><tbody>
+    ? `<p class="hint" style="margin-bottom:8px">${placed.length} event${placed.length === 1 ? "" : "s"} from ${span}.</p>
+       <div style="overflow-x:auto;max-height:460px;overflow-y:auto"><table class="list-table">
+        <thead><tr><th>Date</th><th>Time</th><th>Task</th><th>Type</th><th>Priority</th><th>Status</th></tr></thead><tbody>
         ${indexed.map(({ p, i }) => `<tr>
-          <td>${DAY_NAMES[p.day]}</td>
+          <td>${fmtDate(parseISODate(p.key))}</td>
           <td>${mToHM(p.start)}–${mToHM(p.start + p.len)} (${p.len} min)${!p.fixed && !p.inPref ? " <em>outside preferred time</em>" : ""}</td>
           <td>${esc(p.name)}</td>
           <td>${p.fixed ? "Pinned" : "Auto"}</td>
@@ -606,11 +675,11 @@ function previewPlan() {
             : "OK"}</td>
         </tr>`).join("")}
         </tbody></table></div>`
-    : `<p class="hint">Nothing new to add for this week. Tasks may already be scheduled, or there is no free time.</p>`;
+    : `<p class="hint">Nothing new to add for this period. Tasks may already be scheduled, or there is no free time.</p>`;
 
   if (shortfalls.length) {
-    html += `<p class="msg err" style="margin-top:12px">Could not place:</p><ul>` +
-      shortfalls.map(s => `<li>${esc(s.name)} on ${s.day} (${s.reason})</li>`).join("") + `</ul>`;
+    html += `<p class="msg err" style="margin-top:12px">Could not place:</p><ul style="max-height:200px;overflow:auto">` +
+      shortfalls.map(s => `<li>${esc(s.name)} on ${esc(s.day)} (${s.reason})</li>`).join("") + `</ul>`;
   }
   el("preview-body").innerHTML = html;
   el("confirm-msg").textContent = "";
@@ -640,8 +709,8 @@ function bodyFor(p) {
   };
   return {
     ...base,
-    start: { dateTime: at(p.day, p.start).toISOString(), timeZone: TZ },
-    end: { dateTime: at(p.day, p.start + p.len).toISOString(), timeZone: TZ }
+    start: { dateTime: dateAt(p.key, p.start).toISOString(), timeZone: TZ },
+    end: { dateTime: dateAt(p.key, p.start + p.len).toISOString(), timeZone: TZ }
   };
 }
 
@@ -673,7 +742,13 @@ async function commitPlan() {
 
 /* ===================== Repeating task list ===================== */
 function normTask(q) {
-  if (q.repeat) return q;
+  if (q.repeat) {
+    // Keep only the end setting that was actually chosen
+    if (q.ends === "until") q.count = 0;
+    else if (q.ends === "count") q.until = "";
+    else { q.until = ""; q.count = 0; }
+    return q;
+  }
   // Migrate tasks saved by the earlier version
   return {
     id: q.id, name: q.name, bucket: q.bucket, priority: q.priority, minutes: q.minutes,
@@ -701,11 +776,10 @@ function renderQueue() {
 }
 
 function updateRepeatUI() {
-  const r = el("t-repeat").value, unit = el("t-unit").value, ends = el("t-ends").value;
+  const r = el("t-repeat").value, unit = el("t-unit").value;
   el("t-days-wrap").classList.toggle("hidden", !(r === "weekly" || (r === "custom" && unit === "week")));
   el("t-custom-wrap").classList.toggle("hidden", r !== "custom");
-  el("t-until-wrap").classList.toggle("hidden", !(r === "custom" && ends === "until"));
-  el("t-count-wrap").classList.toggle("hidden", !(r === "custom" && ends === "count"));
+  el("t-ends-wrap").classList.toggle("hidden", r === "none");
 }
 
 function addTask() {
@@ -723,16 +797,25 @@ function addTask() {
   const days = Array.from(document.querySelectorAll('input[name="tday"]:checked')).map(i => Number(i.value)).sort((a, b) => a - b);
   const interval = Math.max(1, Math.round(Number(el("t-interval").value) || 1));
   const unit = el("t-unit").value;
-  const ends = repeat === "custom" ? el("t-ends").value : "never";
-  const until = el("t-until").value;
-  const count = Math.round(Number(el("t-count").value) || 0);
+  const untilRaw = el("t-until").value;
+  const countRaw = el("t-count").value.trim();
 
   if (!name) return fail("Add a task name.");
   if (!priority || priority < 1) return fail("Priority must be 1 or higher. 1 is the highest.");
   if (!minutes || minutes < 5) return fail("Minutes per day must be at least 5.");
   if (!startDate) return fail("Choose a start date.");
-  if (ends === "until" && (!until || until < startDate)) return fail("The end date must be on or after the start date.");
-  if (ends === "count" && count < 1) return fail("The number of times must be at least 1.");
+
+  let ends = "never", until = "", count = 0;
+  if (repeat !== "none") {
+    if (untilRaw) {
+      if (untilRaw < startDate) return fail("The end date must be on or after the start date.");
+      ends = "until"; until = untilRaw;
+    } else if (countRaw) {
+      count = Math.round(Number(countRaw));
+      if (!count || count < 1) return fail("The number of times must be at least 1.");
+      ends = "count";
+    }
+  }
 
   queue.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
@@ -901,7 +984,8 @@ async function deleteBlock(ev) {
 /* ===================== Wiring ===================== */
 function initForm() {
   el("t-startdate").value = isoOf(new Date());
-  el("t-until").value = isoOf(addDays(new Date(), 90));
+  el("t-until").value = "";
+  el("t-count").value = "";
   updateRepeatUI();
 }
 
@@ -926,7 +1010,6 @@ el("grid").addEventListener("keydown", e => {
 
 el("t-repeat").addEventListener("change", updateRepeatUI);
 el("t-unit").addEventListener("change", updateRepeatUI);
-el("t-ends").addEventListener("change", updateRepeatUI);
 el("t-add").addEventListener("click", addTask);
 el("queue-list").addEventListener("click", e => {
   const id = e.target.getAttribute("data-q-remove");
