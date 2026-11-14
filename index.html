@@ -222,7 +222,7 @@ button:disabled { opacity: .5; cursor: default; }
 
   <section class="card hidden" id="preview" aria-labelledby="prev-h">
     <h2 id="prev-h">Plot preview</h2>
-    <p class="hint">Nothing is saved until you confirm. Items that overlap an existing event are marked. Tick "Allow overlap" to include them.</p>
+    <p class="hint">Nothing is saved until you confirm. Items with a warning (overlap, non-working day or past date) are left out until you tick "Allow anyway".</p>
     <div id="preview-body" style="margin-top:10px"></div>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="confirm-plot" type="button">Add to Google Calendar</button>
@@ -590,13 +590,18 @@ function buildPlan(from, to, timed) {
   const placed = [], shortfalls = [];
   const sorted = [...queue].sort((a, b) => a.priority - b.priority);
   const ranges = new Map(queue.map(t => [t.id, taskRange(t)]));
+  const now = new Date();
   for (let date = new Date(from); date <= to; date = addDays(date, 1)) {
     const key = isoOf(date);
     const wd = (date.getDay() + 6) % 7;
     const dayEvents = timed.filter(e => e.key === key);
     const busy = dayEvents.map(e => ({ s: e.startMin, e: e.startMin + e.len, title: e.title }));
     const av = availability[wd];
-    const wStart = hm(av.start), wEnd = hm(av.end);
+    const workDay = av.on && hm(av.end) > hm(av.start);
+    // On a non-working day auto-placed tasks may still be planned, across the whole day, with a warning
+    const wStart = workDay ? hm(av.start) : 0;
+    const wEnd = workDay ? hm(av.end) : 24 * 60;
+
     for (const t of sorted) {
       const r = ranges.get(t.id);
       if (date < r.from || date > r.to) continue;
@@ -604,20 +609,32 @@ function buildPlan(from, to, timed) {
       const alreadyThere = dayEvents.some(e => e.queue === t.id) || placed.some(p => p.queueId === t.id && p.key === key);
       if (alreadyThere) continue;
 
+      let item;
       if (t.start) {
         const s = hm(t.start), e = s + t.minutes;
-        const clash = busy.find(b => b.s < e && b.e > s) || null;
-        placed.push({ key, start: s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
-          queueId: t.id, fixed: true, clashWith: clash ? clash.title : null, inPref: true, task: t });
+        const warnings = [];
+        const clash = busy.find(b => b.s < e && b.e > s);
+        if (clash) warnings.push("Overlaps “" + clash.title + "”");
+        if (!workDay) warnings.push("Non-working day");
+        item = { key, start: s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
+          queueId: t.id, fixed: true, warnings, inPref: true, task: t };
         busy.push({ s, e, title: t.name });
       } else {
-        if (!av.on || wEnd <= wStart) { shortfalls.push({ name: t.name, day: DAY_NAMES[wd] + " " + key, reason: "not a working day" }); continue; }
         const found = findSlot(busy, wStart, wEnd, t.minutes, t.pref);
-        if (!found) { shortfalls.push({ name: t.name, day: DAY_NAMES[wd] + " " + key, reason: "not enough free time" }); continue; }
-        placed.push({ key, start: found.gap.s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
-          queueId: t.id, fixed: false, clashWith: null, inPref: found.inPref, task: t });
+        if (!found) {
+          shortfalls.push({ name: t.name, day: DAY_NAMES[wd] + " " + key,
+            reason: workDay ? "not enough free time" : "no free time on this non-working day" });
+          continue;
+        }
+        const warnings = workDay ? [] : ["Non-working day"];
+        item = { key, start: found.gap.s, len: t.minutes, name: t.name, bucket: t.bucket, priority: t.priority,
+          queueId: t.id, fixed: false, warnings, inPref: found.inPref, task: t };
         busy.push({ s: found.gap.s, e: found.gap.s + t.minutes, title: t.name });
       }
+
+      // Warn about anything that would be created in the past
+      if (dateAt(key, item.start) < now) item.warnings.push("In the past");
+      placed.push(item);
     }
   }
   return { placed, shortfalls };
@@ -669,9 +686,9 @@ function renderPreview(from, to) {
           <td>${esc(p.name)}</td>
           <td>${p.fixed ? "Pinned" : "Auto"}</td>
           <td>#${p.priority}</td>
-          <td>${p.clashWith
-            ? `<span class="msg err">Overlaps “${esc(p.clashWith)}”</span><br>
-               <label class="chk" style="margin-top:4px"><input type="checkbox" data-allow="${i}"> Allow overlap</label>`
+          <td>${p.warnings.length
+            ? p.warnings.map(w => `<span class="msg err">${esc(w)}</span>`).join("<br>") + `<br>
+               <label class="chk" style="margin-top:4px"><input type="checkbox" data-allow="${i}"> Allow anyway</label>`
             : "OK"}</td>
         </tr>`).join("")}
         </tbody></table></div>`
@@ -690,7 +707,7 @@ function renderPreview(from, to) {
 
 function includedItems() {
   if (!pendingPlan) return [];
-  return pendingPlan.placed.filter((p, i) => !p.clashWith || pendingPlan.allowed.has(i));
+  return pendingPlan.placed.filter((p, i) => !p.warnings.length || pendingPlan.allowed.has(i));
 }
 
 function updateConfirm() {
